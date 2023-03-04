@@ -1,0 +1,39 @@
+spring:
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      jedis:
+        pool:
+          max-active: 8
+          max-wait: -1
+          max-idle: 8
+          min-idle: 0
+      connect-timeout: 1000
+
+  datasource:
+    name: deepLearning-datasource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/testdb?useUnicode=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&autoReconnect=true&useSSL=false&allowMultiQueries=true&useAffectedRows=true
+    username: root
+    password: mysql@localhost
+    hikari:
+      pool-name: hikariCP
+      minimum-idle: 100
+      maximum-pool-size: 200
+      auto-commit: true
+      idle-timeout: 10000
+      max-lifetime: 30000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+
+
+mybatis:
+  mapper-locations: classpath:mapper/*Mapper.xml    # mapper映射文件位置

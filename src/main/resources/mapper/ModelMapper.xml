@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xrervip.super_ai_service.dao.ModelMapper">
+    <resultMap id="BaseResultMap" type="com.xrervip.super_ai_service.entity.ModelPo">
+        <id column="model_id" jdbcType="INTEGER" property="modelId" />
+        <result column="model_name" jdbcType="VARCHAR" property="modelName" />
+        <result column="model_blob" jdbcType="CLOB" property="modelBlob" />
+        <result column="input_classname" jdbcType="VARCHAR" property="inputClassName" />
+        <result column="output_classname" jdbcType="VARCHAR" property="outputClassName" />
+        <result column="model_engine" jdbcType="VARCHAR" property="modelEngine" />
+    </resultMap>
+    <sql id="Base_Column_List">
+        model_id,model_name,model_blob,input_classname,output_classname,model_engine
+    </sql>
+
+    <insert id="insert" parameterType="com.xrervip.super_ai_service.entity.ModelPo">
+        insert into model(model_name,model_blob,input_classname,output_classname,model_engine)
+        values (#{modelName,jdbcType=VARCHAR}, #{modelBlob,jdbcType=CLOB},#{inputClassName,jdbcType=VARCHAR},#{outputClassName,jdbcType=VARCHAR},#{modelEngine,jdbcType=VARCHAR})
+    </insert>
+
+    <select id="selectByModelName" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List" />
+        from model
+        where model_name = #{modelName,jdbcType=VARCHAR}
+    </select>
+</mapper>
