@@ -1,5 +1,6 @@
 package com.xrervip.super_ai_service.constant;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.Builder;
 import lombok.Data;
 
@@ -7,13 +8,14 @@ import java.io.Serializable;
 
 /**
  * Created with IntelliJ IDEA.
- * Description:
+ * Description:api的返回结果
  *
  * @Author: frzquantum@gmail.com
  * DateTime: 2022-12-15 18:22
  */
 @Data
 @Builder
+@ApiResponse(ref = "api通用返回数据")
 public class ResponseResult<T> {
 
     /**
@@ -84,6 +86,22 @@ public class ResponseResult<T> {
         return ResponseResult.<T>builder().data(data)
                 .message(message)
                 .status(ResponseStatus.FAIL.getResponseCode())
+                .timestamp(System.currentTimeMillis())
+                .build();
+    }
+
+    public static <T> ResponseResult<T> notFound(T data, String message) {
+        return ResponseResult.<T>builder().data(data)
+                .message(message)
+                .status(ResponseStatus.NOT_FOUND.getResponseCode())
+                .timestamp(System.currentTimeMillis())
+                .build();
+    }
+
+    public static <T> ResponseResult<T> badRequest(T data, String message) {
+        return ResponseResult.<T>builder().data(data)
+                .message(message)
+                .status(ResponseStatus.BAD_REQUEST.getResponseCode())
                 .timestamp(System.currentTimeMillis())
                 .build();
     }

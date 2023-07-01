@@ -15,6 +15,6 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "model")
 @Configuration
 public class ModelProperties {
-    private String deviceType = "cpu";
+    private String deviceType = "gpu";
 
 }

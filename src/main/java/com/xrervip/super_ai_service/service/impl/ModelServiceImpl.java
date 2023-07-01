@@ -2,36 +2,35 @@ package com.xrervip.super_ai_service.service.impl;
 
 import ai.djl.Device;
 import ai.djl.MalformedModelException;
-import ai.djl.paddlepaddle.zoo.cv.objectdetection.PpWordDetectionTranslator;
 import ai.djl.repository.zoo.Criteria;
 import ai.djl.repository.zoo.ModelNotFoundException;
 import ai.djl.repository.zoo.ZooModel;
+import ai.djl.translate.Translator;
 import com.xrervip.super_ai_service.common.ModelProperties;
+import com.xrervip.super_ai_service.common.ModelUrlUtils;
+import com.xrervip.super_ai_service.common.TranslatorTable;
 import com.xrervip.super_ai_service.dao.ModelMapper;
-import com.xrervip.super_ai_service.entity.ModelDto;
-import com.xrervip.super_ai_service.entity.ModelPo;
+import com.xrervip.super_ai_service.entity.ModelInfoDTO;
+import com.xrervip.super_ai_service.entity.ModelDO;
 import com.xrervip.super_ai_service.exception.ModelException;
+import com.xrervip.super_ai_service.exception.ResourceNotFoundException;
+import com.xrervip.super_ai_service.redis.ModelKey;
+import com.xrervip.super_ai_service.redis.RedisService;
 import com.xrervip.super_ai_service.service.ModelService;
-import lombok.AllArgsConstructor;
+import com.xrervip.super_ai_service.validator.ValidModel;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.xrervip.super_ai_service.common.Constants.ENGINE_PADDLE;
-
 /**
  * Created with IntelliJ IDEA.
- * Description:
+ * Description: 模型服务 提供加载模型
  *
  * @Author: frzquantum@gmail.com
  * DateTime: 2023-02-28 19:56
@@ -39,61 +38,55 @@ import static com.xrervip.super_ai_service.common.Constants.ENGINE_PADDLE;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@Validated
 public class ModelServiceImpl implements ModelService {
     private final ModelProperties prop;
-
+    private final RedisService redisService;
     private final ModelMapper modelMapper;
-    private final Map<String,ZooModel> models = new HashMap<>();
+    private final Map<String,ZooModel> models = new ConcurrentHashMap<>();
 
     @Override
-    public void addModel(ModelDto modelDto,byte[] bytes) {
-        // todo
-        ModelPo modelPo = new ModelPo(modelDto.getModelName(),modelDto.getInputClassName(),modelDto.getOutputClassName(),modelDto.getModelEngine(),bytes);
-        modelMapper.insert(modelPo);
+    public void addModel(@Valid @ValidModel ModelInfoDTO modelInfoDto, byte[] bytes) {
+        ModelDO modelDO = new ModelDO(modelInfoDto.getModelName(), modelInfoDto.getInputClassName(), modelInfoDto.getOutputClassName(), modelInfoDto.getModelEngine(),bytes, modelInfoDto.getModelTranslator());
+        modelMapper.insert(modelDO);
     }
 
     @Override
     public void loadModel(String modelName) {
+        Long startTime = System.currentTimeMillis();
         if(this.checkModel(modelName)) return;
-        ModelPo modelPo = modelMapper.selectByModelName(modelName);
-        if(modelPo==null) throw new ModelException("Model:"+ modelName+" not exist");
+        ModelDO modelDO = modelMapper.selectByModelName(modelName);
+        if(modelDO ==null) throw new ResourceNotFoundException("Model: "+ modelName+" not exist");
 
         Device device = Device.Type.CPU.equalsIgnoreCase(prop.getDeviceType()) ? Device.cpu() : Device.gpu();
 
         try {
-            Class inputClass = Class.forName(modelPo.getInputClassName());
-            Class outputClass = Class.forName(modelPo.getOutputClassName());
+            Class inputClass = Class.forName(modelDO.getInputClassName());
+            Class outputClass = Class.forName(modelDO.getOutputClassName());
 
-            String engine = modelPo.getModelEngine();
-            byte[] modelBlob = modelPo.getModelBlob();
+            String engine = modelDO.getModelEngine();
+            byte[] modelBlob = modelDO.getModelBlob();
 
-            String filepath =  "jar://models/" + modelName +".zip";
-            File file  = new File(filepath);
-            if(file.exists()){
-                file.delete();
-            }
+            String path = ModelUrlUtils.saveTmpModel(modelName,modelBlob);
 
-            FileOutputStream fos = new FileOutputStream(file);
-            fos.write(modelBlob,0,modelBlob.length);
-            fos.flush();
-            fos.close();
+            Translator translator = TranslatorTable.getTranslator(modelDO.getModelTranslator());
 
-
-            ZooModel model  =  Criteria.builder()
+            ZooModel model  = Criteria.builder()
                     .optEngine(engine)
                     .setTypes(inputClass, outputClass)
-                    .optModelUrls(filepath)
-                    .optTranslator(new PpWordDetectionTranslator(new ConcurrentHashMap<>()))
+                    .optModelUrls(path)
+                    .optTranslator(translator)
                     .optDevice(device)
                     .build()
                     .loadModel();
 
             models.put(modelName,model);
+            Long endTime = System.currentTimeMillis();
 
+            log.info("Load model : {} successful in {} ms ",modelName,endTime-startTime);
         } catch (ClassNotFoundException | ModelNotFoundException | MalformedModelException | IOException e) {
             throw new ModelException(e);
         }
-
 
 
     }
@@ -104,14 +97,29 @@ public class ModelServiceImpl implements ModelService {
     }
 
     @Override
+    public ZooModel getOrLoadModel(String modelName) {
+        if(!checkModel(modelName)){
+            loadModel(modelName);
+        }
+        return getModel(modelName);
+    }
+
+    @Override
     public byte[] getModelFile(String modelName) {
-        ModelPo modelPo = modelMapper.selectByModelName(modelName);
-        if(modelPo==null) throw new ModelException("Model:"+ modelName+" not exist.");
-        return modelPo.getModelBlob();
+        if(redisService.hasKey(ModelKey.modelKey,modelName)){
+            log.info("get Model File: {} From Redis .",modelName);
+            Object value =redisService.get(ModelKey.modelKey,modelName);
+            return ((String)value).getBytes();
+        }
+        ModelDO modelDO = modelMapper.selectByModelName(modelName);
+        if(modelDO ==null) throw new ResourceNotFoundException("Model:"+ modelName+" not exist.");
+        byte[] modelBlob = modelDO.getModelBlob();
+        redisService.set(ModelKey.modelKey,modelName,modelBlob);
+        return modelBlob;
     }
 
     @Override
     public boolean checkModel(String modelName) {
-        return modelName.contains(modelName);
+        return models.containsKey(modelName);
     }
 }

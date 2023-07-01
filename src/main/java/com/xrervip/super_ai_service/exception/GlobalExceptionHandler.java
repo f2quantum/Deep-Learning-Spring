@@ -1,6 +1,8 @@
 package com.xrervip.super_ai_service.exception;
 
+import jakarta.validation.ValidationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -32,6 +34,27 @@ public class GlobalExceptionHandler {
         return ResponseResult.fail(null, modelException.getLocalizedMessage()==null
                 ? ResponseStatus.HTTP_STATUS_500.getDescription()
                 : modelException.getLocalizedMessage());
+    }
+
+    @ResponseBody
+    @ExceptionHandler(BindException.class)
+    public ResponseResult<BindException> processModelException(BindException bindException) {
+        log.error(bindException.getLocalizedMessage());
+        return ResponseResult.badRequest(null, "Parameter could not be NULL");
+    }
+
+    @ResponseBody
+    @ExceptionHandler(ValidationException.class)
+    public ResponseResult<ValidationException> processModelException(ValidationException bindException) {
+        log.error(bindException.getLocalizedMessage());
+        return ResponseResult.badRequest(null, "Bad parameters");
+    }
+
+    @ResponseBody
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseResult<ResourceNotFoundException> processModelException(ResourceNotFoundException notExistException) {
+        log.error(notExistException.getLocalizedMessage());
+        return ResponseResult.notFound(null, "Target resource not exist.");
     }
 
     /**
